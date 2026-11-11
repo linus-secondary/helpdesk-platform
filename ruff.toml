@@ -1,0 +1,11 @@
+# Linting rules used locally and by the Jenkins pipeline
+line-length = 120
+target-version = "py312"
+src = ["app"]
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP", "S"]   # style, errors, imports, bugbear, pyupgrade, bandit security
+ignore = ["S101", "S104", "S608", "B008"]       # asserts in tests, 0.0.0.0 bind, SQL built from fixed fragments only, FastAPI Depends()
+
+[lint.per-file-ignores]
+"loadtest/*" = ["S311"]   # random choice of test data, not cryptography

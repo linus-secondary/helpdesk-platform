@@ -1,0 +1,128 @@
+# Full local stack: microservices + PostgreSQL + Redis + Keycloak + Prometheus + Grafana
+# Optional ELK logging stack:   docker compose --profile logging up -d
+# Everything here is free and runs on your laptop.
+
+x-app: &app
+  build: ./app
+  image: helpdesk-platform:local
+  restart: unless-stopped
+  env_file: .env
+  environment: &app-env
+    DATABASE_URL: postgresql://helpdesk:helpdesk@postgres:5432/helpdesk
+    REDIS_URL: redis://redis:6379/0
+    KEYCLOAK_ISSUER: http://localhost:8080/auth/realms/helpdesk
+    KEYCLOAK_JWKS_URL: http://keycloak:8080/auth/realms/helpdesk/protocol/openid-connect/certs
+    KEYCLOAK_PUBLIC_URL: http://localhost:8080/auth
+  depends_on:
+    postgres: { condition: service_healthy }
+    redis: { condition: service_started }
+  labels:
+    logging: "app"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: helpdesk
+      POSTGRES_USER: helpdesk
+      POSTGRES_PASSWORD: helpdesk
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U helpdesk -d helpdesk"]
+      interval: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_HOSTNAME: http://localhost:8080/auth
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HEALTH_ENABLED: "true"
+    volumes: ["./k8s/base/keycloak:/opt/keycloak/data/import:ro"]
+    ports: ["8080:8080"]
+
+  gateway:
+    <<: *app
+    environment: { <<: *app-env, SERVICE: gateway }
+    ports: ["8000:8000"]
+  tickets:
+    <<: *app
+    environment: { <<: *app-env, SERVICE: tickets }
+  sla:
+    <<: *app
+    environment: { <<: *app-env, SERVICE: sla }
+  notifications:
+    <<: *app
+    environment: { <<: *app-env, SERVICE: notifications }
+  chatbot:
+    <<: *app
+    environment: { <<: *app-env, SERVICE: chatbot }
+    volumes: ["${USERPROFILE:-~}/.aws:/home/appuser/.aws:ro"]   # only used when BEDROCK_ENABLED=true
+
+  # ---------------- monitoring ----------------
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+    ports: ["9090:9090"]
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["3000:3000"]
+    depends_on: [prometheus]
+
+  # ---------------- logging (ELK) - optional: --profile logging ----------------
+  elasticsearch:
+    profiles: ["logging"]
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    volumes: [esdata:/usr/share/elasticsearch/data]
+    ports: ["9200:9200"]
+
+  logstash:
+    profiles: ["logging"]
+    image: docker.elastic.co/logstash/logstash:8.15.3
+    volumes: ["./logging/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro"]
+    environment: { LS_JAVA_OPTS: -Xms256m -Xmx256m }
+    depends_on: [elasticsearch]
+
+  filebeat:
+    profiles: ["logging"]
+    image: docker.elastic.co/beats/filebeat:8.15.3
+    user: root
+    command: ["filebeat", "-e", "--strict.perms=false"]
+    volumes:
+      - ./logging/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on: [logstash]
+
+  kibana:
+    profiles: ["logging"]
+    image: docker.elastic.co/kibana/kibana:8.15.3
+    environment: { ELASTICSEARCH_HOSTS: http://elasticsearch:9200 }
+    ports: ["5601:5601"]
+    depends_on: [elasticsearch]
+
+volumes:
+  pgdata:
+  esdata:

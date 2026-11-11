@@ -1,0 +1,92 @@
+{
+  "realm": "helpdesk",
+  "enabled": true,
+  "displayName": "IT Helpdesk",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "resetPasswordAllowed": false,
+  "bruteForceProtected": true,
+  "failureFactor": 5,
+  "maxFailureWaitSeconds": 900,
+  "passwordPolicy": "length(10) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1) and notUsername and passwordHistory(3)",
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA1",
+  "otpPolicyDigits": 6,
+  "otpPolicyPeriod": 30,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "sslRequired": "external",
+  "eventsEnabled": true,
+  "eventsExpiration": 2592000,
+  "enabledEventTypes": ["LOGIN", "LOGIN_ERROR", "LOGOUT", "UPDATE_TOTP", "REMOVE_TOTP", "UPDATE_PASSWORD"],
+  "adminEventsEnabled": true,
+  "roles": {
+    "realm": [
+      { "name": "user", "description": "Employee: raise and follow own tickets" },
+      { "name": "agent", "description": "IT support agent: work the ticket queue (MFA required)" },
+      { "name": "admin", "description": "Helpdesk admin: agent rights plus SLA reports (MFA required)" }
+    ]
+  },
+  "defaultRole": {
+    "name": "default-roles-helpdesk",
+    "composite": true,
+    "composites": { "realm": ["user", "offline_access", "uma_authorization"] }
+  },
+  "clients": [
+    {
+      "clientId": "helpdesk-web",
+      "name": "IT Helpdesk web app",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "redirectUris": ["http://localhost:8000/*"],
+      "webOrigins": ["http://localhost:8000"],
+      "attributes": { "pkce.code.challenge.method": "S256", "post.logout.redirect.uris": "http://localhost:8000/*" }
+    },
+    {
+      "clientId": "helpdesk-cli",
+      "name": "Test client for the smoke test (password grant - local development only)",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true
+    }
+  ],
+  "users": [
+    {
+      "username": "employee1",
+      "email": "employee1@example.com",
+      "firstName": "Priya",
+      "lastName": "Employee",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "Employee@1234", "temporary": false }],
+      "realmRoles": ["default-roles-helpdesk"]
+    },
+    {
+      "username": "agent1",
+      "email": "agent1@example.com",
+      "firstName": "Arun",
+      "lastName": "Agent",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "Agent@12345", "temporary": false }],
+      "requiredActions": ["CONFIGURE_TOTP"],
+      "realmRoles": ["default-roles-helpdesk", "agent"]
+    },
+    {
+      "username": "admin1",
+      "email": "admin1@example.com",
+      "firstName": "Meera",
+      "lastName": "Admin",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "Admin@12345", "temporary": false }],
+      "requiredActions": ["CONFIGURE_TOTP"],
+      "realmRoles": ["default-roles-helpdesk", "agent", "admin"]
+    }
+  ]
+}

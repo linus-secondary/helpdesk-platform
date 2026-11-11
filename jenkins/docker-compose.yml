@@ -1,0 +1,14 @@
+# Runs Jenkins locally for free:  docker compose -f jenkins/docker-compose.yml up -d --build
+# Open http://localhost:8081  (initial admin password: see README)
+services:
+  jenkins:
+    build: .
+    ports: ["8081:8080"]
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock   # builds images with the host Docker engine
+    group_add: ["0"]                                 # access to the Docker socket on Docker Desktop
+    restart: unless-stopped
+
+volumes:
+  jenkins_home:

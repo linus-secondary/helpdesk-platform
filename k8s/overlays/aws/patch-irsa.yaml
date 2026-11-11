@@ -1,0 +1,35 @@
+# IAM Roles for Service Accounts: chatbot may call Bedrock, notifications may publish to SNS.
+# No AWS access keys are stored in the cluster.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: chatbot
+  annotations:
+    eks.amazonaws.com/role-arn: CHATBOT_ROLE_ARN_PLACEHOLDER
+automountServiceAccountToken: true
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: notifications
+  annotations:
+    eks.amazonaws.com/role-arn: NOTIFICATIONS_ROLE_ARN_PLACEHOLDER
+automountServiceAccountToken: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chatbot
+spec:
+  template:
+    spec:
+      automountServiceAccountToken: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notifications
+spec:
+  template:
+    spec:
+      automountServiceAccountToken: true

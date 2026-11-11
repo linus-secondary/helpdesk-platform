@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+spec:
+  template:
+    spec:
+      containers:
+        - name: keycloak
+          env:
+            - {name: KC_HOSTNAME, value: "PUBLIC_URL_PLACEHOLDER/auth"}
+---
+# Keycloak's own health endpoint for the ALB target group
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  annotations:
+    alb.ingress.kubernetes.io/healthcheck-path: /auth/realms/helpdesk

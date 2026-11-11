@@ -1,0 +1,27 @@
+# Internet-facing Application Load Balancer with AWS WAF attached.
+# /auth -> Keycloak (login), everything else -> API gateway.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: helpdesk
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/wafv2-acl-arn: WAF_ACL_ARN_PLACEHOLDER
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/load-balancer-attributes: routing.http.drop_invalid_header_fields.enabled=true
+    alb.ingress.kubernetes.io/tags: Project=helpdesk-platform
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /auth
+            pathType: Prefix
+            backend:
+              service: {name: keycloak, port: {number: 8080}}
+          - path: /
+            pathType: Prefix
+            backend:
+              service: {name: gateway, port: {number: 80}}

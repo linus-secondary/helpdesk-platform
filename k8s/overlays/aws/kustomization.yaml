@@ -1,0 +1,23 @@
+# AWS EKS: database is Amazon RDS, images come from Amazon ECR, and ONE Application Load Balancer
+# (created by the AWS Load Balancer Controller) serves both the app (/) and Keycloak (/auth),
+# protected by AWS WAF. Placeholders are filled in by scripts/aws-deploy.sh at deploy time.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: helpdesk
+resources:
+  - ../../base
+  - ingress.yaml
+images:
+  - name: helpdesk-platform
+    newName: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/helpdesk-platform
+    newTag: latest
+secretGenerator:
+  - name: app-secrets
+    envs: [secrets.env]                          # git-ignored, generated at deploy time
+configMapGenerator:
+  - name: app-config
+    behavior: merge
+    envs: [config.env]
+patches:
+  - path: patch-keycloak.yaml
+  - path: patch-irsa.yaml

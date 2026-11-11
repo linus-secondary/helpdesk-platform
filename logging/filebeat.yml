@@ -1,0 +1,14 @@
+# Ships the JSON logs of every app container to Logstash.
+filebeat.autodiscover:
+  providers:
+    - type: docker
+      templates:
+        - condition:
+            equals:
+              docker.container.labels.logging: "app"
+          config:
+            - type: container
+              paths: ["/var/lib/docker/containers/${data.docker.container.id}/*.log"]
+
+output.logstash:
+  hosts: ["logstash:5044"]

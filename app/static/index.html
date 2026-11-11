@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IT Helpdesk</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="config.js"></script>
+</head>
+<body>
+  <header>
+    <h1>IT Helpdesk</h1>
+    <nav>
+      <button data-view="tickets" class="active">Tickets</button>
+      <button data-view="new">New ticket</button>
+      <button data-view="help">Help assistant</button>
+      <button data-view="sla" class="staff-only" hidden>SLA dashboard</button>
+    </nav>
+    <div id="auth">
+      <button id="bell" title="Notifications">Notifications <span id="unread"></span></button>
+      <span id="user-name"></span>
+      <button id="logout">Sign out</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="view-tickets">
+      <form id="filters">
+        <select id="f-status">
+          <option value="">Any status</option><option>OPEN</option><option>IN_PROGRESS</option>
+          <option>WAITING_ON_USER</option><option>RESOLVED</option><option>CLOSED</option>
+        </select>
+        <select id="f-priority"><option value="">Any priority</option><option>P1</option><option>P2</option><option>P3</option><option>P4</option></select>
+        <label class="staff-only" hidden><input type="checkbox" id="f-mine"> Assigned to me</label>
+        <button type="submit">Filter</button>
+      </form>
+      <table id="ticket-table"></table>
+    </section>
+
+    <section id="view-new" hidden>
+      <h2>Raise a ticket</h2>
+      <form id="new-form" class="stack">
+        <input id="t-title" placeholder="Short summary, e.g. VPN not connecting" required minlength="5" maxlength="200">
+        <textarea id="t-desc" rows="6" placeholder="What happened? What have you tried? Who is affected?" required minlength="10"></textarea>
+        <div id="kb-hints"></div>
+        <button type="submit">Submit ticket</button>
+      </form>
+      <p class="muted">The AI assistant sets the category and priority automatically; an agent can change them.</p>
+    </section>
+
+    <section id="view-detail" hidden>
+      <button id="back">&larr; Back</button>
+      <div id="detail"></div>
+      <div id="staff-actions" class="staff-only" hidden>
+        <h3>Agent actions</h3>
+        <form id="update-form">
+          <select id="u-status"><option value="">Status...</option><option>IN_PROGRESS</option><option>WAITING_ON_USER</option><option>RESOLVED</option><option>CLOSED</option></select>
+          <select id="u-priority"><option value="">Priority...</option><option>P1</option><option>P2</option><option>P3</option><option>P4</option></select>
+          <label><input type="checkbox" id="u-assign"> Assign to me</label>
+          <button type="submit">Update</button>
+        </form>
+      </div>
+      <div id="user-actions" hidden>
+        <button id="confirm-fix">Confirm fixed (close)</button>
+        <button id="reopen">Still broken (reopen)</button>
+      </div>
+      <h3>Conversation</h3>
+      <div id="comments"></div>
+      <form id="comment-form" class="stack">
+        <textarea id="c-body" rows="3" placeholder="Add a reply" required></textarea>
+        <label class="staff-only" hidden><input type="checkbox" id="c-internal"> Internal note (hidden from the requester)</label>
+        <button type="submit">Send</button>
+      </form>
+    </section>
+
+    <section id="view-help" hidden>
+      <h2>Help assistant</h2>
+      <p class="muted">Answers come from the IT knowledge base. If it can't help, raise a ticket.</p>
+      <div id="chat-log"></div>
+      <form id="chat-form">
+        <input id="chat-input" placeholder="e.g. My VPN keeps disconnecting" required>
+        <button type="submit">Ask</button>
+      </form>
+    </section>
+
+    <section id="view-sla" hidden>
+      <h2>SLA compliance (last 30 days)</h2>
+      <div id="sla-summary"></div>
+      <h3>Open tickets that breached SLA</h3>
+      <table id="sla-breaches"></table>
+    </section>
+  </main>
+
+  <aside id="notifications" hidden></aside>
+  <div id="toast" hidden></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

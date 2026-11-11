@@ -1,0 +1,161 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: helpdesk
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  REDIS_URL: redis://redis:6379/0
+  KEYCLOAK_ISSUER: http://localhost:8080/auth/realms/helpdesk      # patched per environment
+  KEYCLOAK_PUBLIC_URL: http://localhost:8080/auth                  # patched per environment
+  KEYCLOAK_JWKS_URL: http://keycloak:8080/auth/realms/helpdesk/protocol/openid-connect/certs
+  RATE_LIMIT_PER_MINUTE: "120"
+  SLA_CHECK_SECONDS: "60"
+  BEDROCK_ENABLED: "false"
+  AWS_REGION: us-east-1
+  BEDROCK_MODEL_ID: anthropic.claude-opus-5-5
+  SNS_TOPIC_ARN: ""
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: app
+automountServiceAccountToken: false
+---
+# Own identity so only the chatbot can be granted Bedrock access (IRSA on AWS)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: chatbot
+automountServiceAccountToken: false
+---
+# Own identity so only notifications can publish to SNS (IRSA on AWS)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: notifications
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  labels: {app: redis}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: redis}
+  template:
+    metadata:
+      labels: {app: redis}
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          args: ["--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
+          ports: [{containerPort: 6379}]
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 200m, memory: 128Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+spec:
+  selector: {app: redis}
+  ports: [{port: 6379}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  labels: {app: keycloak}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: keycloak}
+  template:
+    metadata:
+      labels: {app: keycloak}
+    spec:
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.0
+          args: ["start-dev", "--import-realm"]
+          env:
+            - {name: KC_HTTP_RELATIVE_PATH, value: /auth}
+            - {name: KC_HOSTNAME, value: "http://localhost:8080/auth"}   # patched per environment
+            - {name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC, value: "true"}
+            - {name: KC_HEALTH_ENABLED, value: "true"}
+            - {name: KC_PROXY_HEADERS, value: xforwarded}
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              valueFrom: {secretKeyRef: {name: app-secrets, key: KEYCLOAK_ADMIN_USER}}
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom: {secretKeyRef: {name: app-secrets, key: KEYCLOAK_ADMIN_PASSWORD}}
+          ports: [{containerPort: 8080, name: http}, {containerPort: 9000, name: management}]
+          volumeMounts: [{name: realm, mountPath: /opt/keycloak/data/import, readOnly: true}]
+          readinessProbe:
+            httpGet: {path: /auth/health/ready, port: management}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 250m, memory: 512Mi}
+            limits: {cpu: "1", memory: 1Gi}
+      volumes:
+        - name: realm
+          configMap: {name: keycloak-realm}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+spec:
+  selector: {app: keycloak}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+# Zero-trust networking: backend pods accept traffic only from pods in this namespace and from
+# the monitoring namespace. The gateway (and Keycloak, for login) are the only public entry points.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-only-from-namespace
+spec:
+  podSelector:
+    matchLabels: {tier: backend}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {}
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: monitoring}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: public-entry-points
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: app, operator: In, values: [gateway, keycloak]}
+  policyTypes: [Ingress]
+  ingress:
+    - {}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-only-from-gateway
+spec:
+  podSelector:
+    matchLabels: {app: redis}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app: gateway}

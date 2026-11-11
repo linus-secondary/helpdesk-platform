@@ -1,0 +1,18 @@
+# Local cluster (minikube / Docker Desktop Kubernetes): PostgreSQL runs as a pod.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: helpdesk
+resources:
+  - ../../base
+  - postgres.yaml
+images:
+  - name: helpdesk-platform
+    newName: helpdesk-platform
+    newTag: local
+secretGenerator:
+  - name: app-secrets
+    literals:                                   # development values only
+      - DATABASE_URL=postgresql://helpdesk:helpdesk@postgres:5432/helpdesk
+      - INTERNAL_TOKEN=local-dev-internal-token
+      - KEYCLOAK_ADMIN_USER=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
